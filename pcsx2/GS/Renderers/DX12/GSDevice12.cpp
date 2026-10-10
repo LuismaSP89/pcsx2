@@ -1172,9 +1172,11 @@ bool GSDevice12::CreateSwapChain()
 			&fs_desc, fullscreen_output.get(), m_swap_chain.put());
 		if (FAILED(hr))
 		{
-			Console.Warning("D3D12: Failed to create fullscreen swap chain, trying windowed.");
+			Console.Warning("D3D12: Failed to create fullscreen swap chain: 0x%08X, trying windowed.", hr);
 			m_is_exclusive_fullscreen = false;
 			m_using_allow_tearing = m_allow_tearing_supported;
+			if (m_using_allow_tearing)
+				swap_chain_desc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 		}
 	}
 
@@ -2264,7 +2266,7 @@ void GSDevice12::DoMerge(GSTexture* sTex[3], GSVector4* sRect, GSTexture* dTex, 
 		OMSetRenderTargets(sTex[2], nullptr, nullptr, fbarea);
 		BeginRenderPass(
 			D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE, D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE);
-		DrawStretchRect(full_r, dRect[2], dsize);
+		DrawStretchRect(full_r, dRect[2], fbsize);
 	}
 
 	EndRenderPass();
@@ -4412,8 +4414,6 @@ void GSDevice12::RenderHW(GSHWDrawConfig& config)
 	GSTexture12* draw_rt_rov = config.ps.HasColorROV() ? static_cast<GSTexture12*>(config.rt) : nullptr;
 	GSTexture12* draw_ds_rov = config.ps.HasDepthROV() ? static_cast<GSTexture12*>(config.ds) : nullptr;
 	GSTexture12* draw_rt_clone = nullptr;
-
-	const bool feedback = draw_rt && (config.require_one_barrier || (config.require_full_barrier && m_features.texture_barrier) || (config.tex && config.tex == config.rt));
 
 	// Align the render area to 128x128, hopefully avoiding render pass restarts for small render area changes (e.g. Ratchet and Clank).
 	const GSVector2i rtsize(config.rt ? config.rt->GetSize() : config.ds->GetSize());

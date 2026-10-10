@@ -437,7 +437,7 @@ bool GSDeviceOGL::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 
 		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(GSVertexPT1), (const GLvoid*)(0));
 		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GSVertexPT1), (const GLvoid*)(16));
-		glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(GSVertex), (const GLvoid*)(8));
+		glVertexAttribIPointer(2, 4, GL_UNSIGNED_BYTE, sizeof(GSVertex), (const GLvoid*)(8));
 		glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(GSVertex), (const GLvoid*)(12));
 		glVertexAttribIPointer(4, 2, GL_UNSIGNED_SHORT, sizeof(GSVertex), (const GLvoid*)(16));
 		glVertexAttribIPointer(5, 1, GL_UNSIGNED_INT, sizeof(GSVertex), (const GLvoid*)(20));
@@ -938,7 +938,9 @@ bool GSDeviceOGL::CheckFeatures()
 		GLAD_GL_VERSION_4_2 || GLAD_GL_ARB_texture_compression_bptc || GLAD_GL_EXT_texture_compression_bptc;
 	m_features.prefer_new_textures = false;
 	m_features.stencil_buffer = true;
-	m_features.test_and_sample_depth = true;
+	// Attachment can not be bound as read only unlike on dx11/12/vk,
+	// and it's not always guaranteed to work properly even if depth write is disabled.
+	m_features.test_and_sample_depth = false;
 	// Auto select chooses depth-as-rt as it appears to be more compatible across hardware.
 	m_features.depth_feedback = GSConfig.DepthFeedbackMode == GSDepthFeedbackMode::Depth;
 	if (!m_features.texture_barrier && m_features.multidraw_fb_copy)
@@ -1730,18 +1732,23 @@ std::string GSDeviceOGL::GenGlslHeader(const std::string_view entry, GLenum type
 {
 	std::string header;
 
-	if (m_features.vs_expand && GLAD_GL_VERSION_4_3)
+	// Intel's GL driver doesn't like the readonly qualifier with 3.3 GLSL.
+	if (GLAD_GL_VERSION_4_3)
 	{
-		// Intel's GL driver doesn't like the readonly qualifier with 3.3 GLSL.
 		header = "#version 430 core\n";
+	}
+	else if (GLAD_GL_VERSION_4_2)
+	{
+		header = "#version 420 core\n";
 	}
 	else
 	{
 		header = "#version 330 core\n";
 		header += "#extension GL_ARB_shading_language_420pack : require\n";
-		if (m_features.vs_expand)
-			header += "#extension GL_ARB_shader_storage_buffer_object: require\n";
 	}
+
+	if (m_features.vs_expand && !GLAD_GL_VERSION_4_3)
+		header += "#extension GL_ARB_shader_storage_buffer_object: require\n";
 
 	if (m_features.framebuffer_fetch && GLAD_GL_EXT_shader_framebuffer_fetch)
 		header += "#extension GL_EXT_shader_framebuffer_fetch : require\n";
@@ -3266,12 +3273,12 @@ void GSDeviceOGL::RenderHW(GSHWDrawConfig& config)
 
 	// Avoid changing framebuffer just to switch from rt+depth to rt and vice versa.
 	bool fb_optimization_needs_barrier = false;
-	if (!(draw_rt || draw_ds_as_rt) && draw_ds && GLState::rt && GLState::rt->GetSize() == draw_ds->GetSize())
+	if (!(draw_rt || draw_ds_as_rt) && draw_ds && config.tex != GLState::rt && GLState::rt && GLState::rt->GetSize() == draw_ds->GetSize())
 	{
 		draw_rt = GLState::rt;
 		fb_optimization_needs_barrier = !GLState::rt_written && GLState::ds == draw_ds;
 	}
-	else if (!(draw_ds || draw_ds_as_rt) && draw_rt && GLState::ds && GLState::ds->GetSize() == draw_rt->GetSize())
+	else if (!(draw_ds || draw_ds_as_rt) && draw_rt && config.tex != GLState::ds && GLState::ds && GLState::ds->GetSize() == draw_rt->GetSize())
 	{
 		draw_ds = GLState::ds;
 		fb_optimization_needs_barrier = !GLState::ds_written && GLState::rt == draw_rt;
