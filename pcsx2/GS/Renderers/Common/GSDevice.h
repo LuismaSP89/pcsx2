@@ -67,6 +67,8 @@ enum class ShaderConvert
 	CLUT_8,
 	YUV,
 	XBR_UPSCALE,
+	GAUSSIAN_BLUR_H,
+	GAUSSIAN_BLUR_V,
 	Count
 };
 
@@ -133,6 +135,8 @@ static inline constexpr bool HasColorOutput(ShaderConvert shader)
 		case ShaderConvert::YUV:
 		case ShaderConvert::COLCLIP_RESOLVE:
 		case ShaderConvert::XBR_UPSCALE:
+		case ShaderConvert::GAUSSIAN_BLUR_H:
+		case ShaderConvert::GAUSSIAN_BLUR_V:
 			return true;
 		default:
 			return false;
@@ -1501,10 +1505,13 @@ protected:
 	GSTexture* m_target_tmp = nullptr;
 	GSTexture* m_current = nullptr;
 	GSTexture* m_cas = nullptr;
+	GSTexture* m_blur = nullptr;
 	GSTexture* m_colclip_rt = nullptr; ///< Temp hw colclip texture
 	GSTexture* m_ds_as_rt = nullptr; ///< Depth as color
 	GSTexture* m_ds_as_rt_orig = nullptr; ///< Where the depth as color came from
 	GSVector4i m_ds_as_rt_valid = GSVector4i::zero(); ///< The region of the depth as color that is identical to the original
+
+	GSVector4 m_blur_source_rect = GSVector4::zero();
 
 	bool AcquireWindow(bool recreate_window);
 
@@ -1520,6 +1527,9 @@ protected:
 
 	/// Applies CAS and writes to the destination texture, which should be a shader writeable texture.
 	virtual bool DoCAS(GSTexture* sTex, GSTexture* dTex, bool sharpen_only, const std::array<u32, NUM_CAS_CONSTANTS>& constants) = 0;
+
+	/// Applies Gaussian blur and writes to the destination texture.
+	void DoGaussianBlur(GSTexture* sTex, const GSVector4& sRect, GSTexture* dTex, GSTexture* tempTex);
 
 	/// Perform texture operations for ImGui
 	void UpdateImGuiTextures();
@@ -1728,6 +1738,7 @@ public:
 	void Resize(int width, int height);
 
 	void CAS(GSTexture*& tex, GSVector4i& src_rect, GSVector4& src_uv, const GSVector4& draw_rect, bool sharpen_only);
+	bool GaussianBlur(GSTexture*& tex, GSVector4& src_uv, const GSVector4& draw_rect, float scale, bool refresh);
 
 	bool ResizeRenderTarget(GSTexture** t, int w, int h, bool preserve_contents, bool recycle);
 
