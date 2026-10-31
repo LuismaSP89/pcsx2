@@ -1116,6 +1116,14 @@ __ri void ImGuiManager::DrawInputsOverlay(float scale, float margin, float spaci
 				break;
 
 				case InputBindingInfo::Type::Motor:
+				{
+					const auto [large_intensity, small_intensity] = InputManager::GetPadVibrationIntensity(slot);
+					const float intensity = (bi.bind_index == 0) ? large_intensity : small_intensity;
+					if (intensity > 0.0f)
+						text.append_format(" {}", (bi.bind_index == 0) ? ICON_PF_CONTROLLER_VIBRATION : ICON_PF_REZ_VIBRATOR);
+				}
+				break;
+
 				case InputBindingInfo::Type::Macro:
 				case InputBindingInfo::Type::Unknown:
 				default:
@@ -1169,6 +1177,13 @@ __ri void ImGuiManager::DrawInputsOverlay(float scale, float margin, float spaci
 				break;
 
 				case InputBindingInfo::Type::Motor:
+				{
+					const auto [large_intensity, small_intensity] = InputManager::GetPadVibrationIntensity(Pad::NUM_CONTROLLER_PORTS + port);
+					const float intensity = (bi.bind_index == 0) ? large_intensity : small_intensity;
+					if (intensity > 0.0f)
+						text.append_format(" {}", (bi.bind_index == 0) ? ICON_PF_CONTROLLER_VIBRATION : ICON_PF_REZ_VIBRATOR);
+				}
+				break;
 				case InputBindingInfo::Type::Macro:
 				case InputBindingInfo::Type::Unknown:
 				default:
